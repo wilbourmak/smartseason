@@ -23,6 +23,7 @@ const FieldForm = () => {
         if (isEdit) {
             fetchField();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
     const fetchAgents = async () => {
