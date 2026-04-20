@@ -26,17 +26,9 @@ services:
   - type: static
     name: smartseason-web
     plan: free
-    buildCommand: npm install && npm run build
-    publishDir: build
-    rootDir: frontend
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/build
     envVars:
       - key: REACT_APP_API_URL
         value: https://smartseason-api-0gyy.onrender.com
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://smartseason-api-0gyy.onrender.com/api/*
-      - type: rewrite
-        source: /*
-        destination: /index.html
 
