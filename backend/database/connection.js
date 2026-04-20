@@ -2,54 +2,61 @@ const admin = require('firebase-admin');
 
 let db = null;
 let firebaseAdmin = null;
+let initError = null;
 
 function initializeFirebase() {
     if (firebaseAdmin) return firebaseAdmin;
+    if (initError) throw initError;
     
     try {
         if (!admin.apps.length) {
+            let creds = null;
+            
+            // Try service account file first
             try {
-                // Try to use service account file first (local development)
                 const serviceAccount = require('../serviceAccountKey.json');
-                admin.initializeApp({
-                    credential: admin.credential.cert(serviceAccount)
-                });
-                console.log('Firebase initialized with service account file');
+                creds = admin.credential.cert(serviceAccount);
+                console.log('Using service account file for Firebase');
             } catch (fileError) {
-                // Fall back to environment variables
+                // Try environment variables
                 if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
-                    admin.initializeApp({
-                        credential: admin.credential.cert({
-                            projectId: process.env.FIREBASE_PROJECT_ID,
-                            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-                            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                        })
+                    creds = admin.credential.cert({
+                        projectId: process.env.FIREBASE_PROJECT_ID,
+                        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
                     });
-                    console.log('Firebase initialized with environment variables');
-                } else {
-                    // Use Application Default Credentials (Cloud Run / GCP)
+                    console.log('Using environment variables for Firebase');
+                }
+            }
+            
+            // Initialize with credentials or without (ADC fallback)
+            if (creds) {
+                admin.initializeApp({ credential: creds });
+            } else {
+                // Application Default Credentials - may fail in some environments
+                try {
                     admin.initializeApp();
-                    console.log('Firebase initialized with Application Default Credentials');
+                    console.log('Using Application Default Credentials for Firebase');
+                } catch (adcError) {
+                    console.error('ADC failed:', adcError.message);
+                    throw new Error('Firebase credentials not found. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL env vars or provide serviceAccountKey.json');
                 }
             }
         }
         
         firebaseAdmin = admin;
         db = admin.firestore();
+        console.log('Firestore database ready');
         return firebaseAdmin;
     } catch (error) {
-        console.error('Failed to initialize Firebase:', error.message);
+        initError = error;
+        console.error('Firebase initialization failed:', error.message);
         throw error;
     }
 }
 
-// Initialize immediately but DON'T crash on error
-// Let the first database request trigger proper error handling
-try {
-    initializeFirebase();
-} catch (err) {
-    console.error('Initial Firebase setup failed, will retry on first request:', err.message);
-}
+// Defer initialization to first use to avoid blocking server startup
+// This prevents the container from failing health checks
 
 // Firestore database interface matching the SQLite pattern
 const firestoreDb = {

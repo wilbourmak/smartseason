@@ -20,6 +20,8 @@ console.log('Starting SmartSeason server...');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('PORT:', process.env.PORT || 5000);
 console.log('JWT_SECRET set:', !!process.env.JWT_SECRET);
+console.log('Current directory:', process.cwd());
+console.log('Files in cwd:', require('fs').readdirSync('.'));
 
 if (!process.env.JWT_SECRET) {
     console.warn('WARNING: JWT_SECRET not set. Using default for development only!');
