@@ -23,5 +23,5 @@ ENV PORT=8080
 # Expose the port
 EXPOSE 8080
 
-# Start the server
-CMD ["node", "server.js"]
+# Start the server (using simple test server)
+CMD ["node", "server-simple.js"]
