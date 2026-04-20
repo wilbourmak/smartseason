@@ -45,9 +45,6 @@ app.use((err, req, res, next) => {
 });
 
 // Export the Express app as a Firebase Cloud Function
-exports.api = functions.https.onRequest(app);
-
-// Configure function for better cold start performance
 exports.api = functions
     .runWith({
         timeoutSeconds: 60,
