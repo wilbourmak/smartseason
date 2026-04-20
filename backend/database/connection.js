@@ -3,20 +3,25 @@ const admin = require('firebase-admin');
 // Initialize Firebase Admin if not already initialized
 if (!admin.apps.length) {
     try {
-        // Try to use service account file first
+        // Try to use service account file first (local development)
         const serviceAccount = require('../serviceAccountKey.json');
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount)
         });
     } catch (error) {
         // Fall back to environment variables
-        admin.initializeApp({
-            credential: admin.credential.cert({
-                projectId: process.env.FIREBASE_PROJECT_ID,
-                privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-                clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            })
-        });
+        if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
+            admin.initializeApp({
+                credential: admin.credential.cert({
+                    projectId: process.env.FIREBASE_PROJECT_ID,
+                    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                })
+            });
+        } else {
+            // Use Application Default Credentials (Cloud Run / GCP)
+            admin.initializeApp();
+        }
     }
 }
 
