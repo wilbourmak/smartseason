@@ -1,11 +1,11 @@
 services:
-  # Backend API (needs startCommand)
+  # Backend API with SQLite
   - type: web
     name: smartseason-api
     runtime: node
     plan: free
     buildCommand: npm install
-    startCommand: node server.js
+    startCommand: npm start
     rootDir: backend
     healthCheckPath: /health
     envVars:
@@ -15,20 +15,6 @@ services:
         value: 10000
       - key: JWT_SECRET
         generateValue: true
-      - key: FIREBASE_PROJECT_ID
-        sync: false
-      - key: FIREBASE_CLIENT_EMAIL
-        sync: false
-      - key: FIREBASE_PRIVATE_KEY
-        sync: false
-
-  # Frontend Static Site (NO startCommand needed)
-  - type: static
-    name: smartseason-web
-    plan: free
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: ./frontend/build
-    envVars:
-      - key: REACT_APP_API_URL
-        value: https://smartseason-api-0gyy.onrender.com
+      - key: RENDER_DISK_PATH
+        value: /var/lib/render
 

@@ -1,7 +1,9 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
-const dbPath = path.join(__dirname, '..', 'smartseason.db');
+const dbPath = process.env.RENDER_DISK_PATH 
+    ? path.join(process.env.RENDER_DISK_PATH, 'smartseason.db')
+    : path.join(__dirname, '..', 'smartseason.db');
 const db = new sqlite3.Database(dbPath);
 
 const initDb = () => {

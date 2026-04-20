@@ -76,18 +76,42 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: 'Internal server error' });
 });
 
-// Start server
+// Initialize database before starting server
+const { exec } = require('child_process');
+
+const initDb = () => {
+    return new Promise((resolve, reject) => {
+        console.log('Initializing database...');
+        exec('node scripts/init-db.js', { cwd: __dirname }, (error, stdout, stderr) => {
+            if (error) {
+                console.error('Database init error:', error);
+                reject(error);
+            } else {
+                console.log(stdout);
+                resolve();
+            }
+        });
+    });
+};
+
+// Start server after DB init
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log(`API available at http://localhost:${PORT}/api`);
-    console.log(`Health check at http://localhost:${PORT}/health`);
-});
+initDb().then(() => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Server running on port ${PORT}`);
+        console.log(`API available at http://localhost:${PORT}/api`);
+        console.log(`Health check at http://localhost:${PORT}/health`);
+    });
 
-server.on('error', (err) => {
-    console.error('Server failed to start:', err);
+    server.on('error', (err) => {
+        console.error('Server failed to start:', err);
+        process.exit(1);
+    });
+}).catch(err => {
+    console.error('Failed to initialize:', err);
     process.exit(1);
 });
 
+// Export for testing
 module.exports = app;
