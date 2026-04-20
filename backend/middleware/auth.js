@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const pool = require('../database/connection');
+const db = require('../database/connection');
 
 const authenticate = async (req, res, next) => {
     try {
@@ -13,16 +13,19 @@ const authenticate = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // Get user from database
-        const result = await pool.query(
-            'SELECT id, email, name, role FROM users WHERE id = $1',
-            [decoded.userId]
-        );
+        const userDoc = await db.firestore.collection('users').doc(decoded.userId).get();
         
-        if (result.rows.length === 0) {
+        if (!userDoc.exists) {
             return res.status(401).json({ error: 'User not found' });
         }
         
-        req.user = result.rows[0];
+        const userData = userDoc.data();
+        req.user = {
+            id: userDoc.id,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role
+        };
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {

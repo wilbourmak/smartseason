@@ -1,5 +1,5 @@
 const express = require('express');
-const pool = require('../database/connection');
+const db = require('../database/connection');
 const { authenticate, authorizeAdmin } = require('../middleware/auth');
 
 const router = express.Router();
@@ -7,17 +7,34 @@ const router = express.Router();
 // Get all field agents (admin only)
 router.get('/', authenticate, authorizeAdmin, async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT u.id, u.name, u.email, u.created_at,
-                   COUNT(f.id) as assigned_fields_count
-            FROM users u
-            LEFT JOIN fields f ON u.id = f.assigned_agent_id
-            WHERE u.role = 'field_agent'
-            GROUP BY u.id, u.name, u.email, u.created_at
-            ORDER BY u.name
-        `);
+        const agentsSnapshot = await db.firestore.collection('users')
+            .where('role', '==', 'field_agent')
+            .orderBy('name')
+            .get();
         
-        res.json({ agents: result.rows });
+        // Get field counts for each agent
+        const allFieldsSnapshot = await db.firestore.collection('fields').get();
+        const agentFieldCounts = {};
+        
+        allFieldsSnapshot.docs.forEach(doc => {
+            const agentId = doc.data().assigned_agent_id;
+            if (agentId) {
+                agentFieldCounts[agentId] = (agentFieldCounts[agentId] || 0) + 1;
+            }
+        });
+        
+        const agents = agentsSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                name: data.name,
+                email: data.email,
+                created_at: data.created_at?.toDate?.().toISOString() || data.created_at,
+                assigned_fields_count: agentFieldCounts[doc.id] || 0
+            };
+        });
+        
+        res.json({ agents });
     } catch (error) {
         console.error('Get agents error:', error);
         res.status(500).json({ error: 'Failed to retrieve agents' });
@@ -30,25 +47,43 @@ router.get('/:id', authenticate, authorizeAdmin, async (req, res) => {
         const { id } = req.params;
         
         // Get agent info
-        const agentResult = await pool.query(
-            'SELECT id, name, email, created_at FROM users WHERE id = ? AND role = ?',
-            [id, 'field_agent']
-        );
+        const agentDoc = await db.firestore.collection('users').doc(id).get();
         
-        if (agentResult.rows.length === 0) {
+        if (!agentDoc.exists) {
             return res.status(404).json({ error: 'Agent not found' });
         }
         
-        // Get assigned fields
-        const fieldsResult = await pool.query(
-            'SELECT * FROM fields WHERE assigned_agent_id = ? ORDER BY created_at DESC',
-            [id]
-        );
+        const agentData = agentDoc.data();
         
-        res.json({
-            agent: agentResult.rows[0],
-            fields: fieldsResult.rows
+        if (agentData.role !== 'field_agent') {
+            return res.status(404).json({ error: 'Agent not found' });
+        }
+        
+        const agent = {
+            id: agentDoc.id,
+            name: agentData.name,
+            email: agentData.email,
+            created_at: agentData.created_at?.toDate?.().toISOString() || agentData.created_at
+        };
+        
+        // Get assigned fields
+        const fieldsSnapshot = await db.firestore.collection('fields')
+            .where('assigned_agent_id', '==', id)
+            .orderBy('created_at', 'desc')
+            .get();
+        
+        const fields = fieldsSnapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                ...data,
+                planting_date: data.planting_date || data.plantingDate,
+                created_at: data.created_at?.toDate?.().toISOString() || data.created_at,
+                updated_at: data.updated_at?.toDate?.().toISOString() || data.updated_at
+            };
         });
+        
+        res.json({ agent, fields });
     } catch (error) {
         console.error('Get agent error:', error);
         res.status(500).json({ error: 'Failed to retrieve agent' });

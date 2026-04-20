@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const pool = require('../database/connection');
+const db = require('../database/connection');
 
 const register = async (req, res) => {
     try {
@@ -16,12 +16,9 @@ const register = async (req, res) => {
         }
         
         // Check if user exists
-        const existingUser = await pool.query(
-            'SELECT id FROM users WHERE email = ?',
-            [email]
-        );
+        const userSnapshot = await db.firestore.collection('users').where('email', '==', email).get();
         
-        if (existingUser.rows.length > 0) {
+        if (!userSnapshot.empty) {
             return res.status(409).json({ error: 'Email already registered' });
         }
         
@@ -29,11 +26,17 @@ const register = async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 10);
         
         // Create user
-        const result = await pool.query(
-            `INSERT INTO users (email, password_hash, name, role)
-             VALUES (?, ?, ?, ?)`,
-            [email, passwordHash, name, role]
-        );
+        const userRef = db.firestore.collection('users').doc();
+        const userData = {
+            email,
+            password_hash: passwordHash,
+            name,
+            role,
+            created_at: db.admin.firestore.FieldValue.serverTimestamp()
+        };
+        await userRef.set(userData);
+        
+        const result = { rows: [{ id: userRef.id, ...userData }] };
         
         res.status(201).json({
             message: 'User created successfully',
@@ -54,16 +57,14 @@ const login = async (req, res) => {
         }
         
         // Get user
-        const result = await pool.query(
-            'SELECT id, email, name, role, password_hash FROM users WHERE email = ?',
-            [email]
-        );
+        const userSnapshot = await db.firestore.collection('users').where('email', '==', email).get();
         
-        if (result.rows.length === 0) {
+        if (userSnapshot.empty) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
         
-        const user = result.rows[0];
+        const userDoc = userSnapshot.docs[0];
+        const user = { id: userDoc.id, ...userDoc.data() };
         
         // Verify password
         const isValid = await bcrypt.compare(password, user.password_hash);
@@ -97,16 +98,22 @@ const login = async (req, res) => {
 
 const getMe = async (req, res) => {
     try {
-        const result = await pool.query(
-            'SELECT id, email, name, role, created_at FROM users WHERE id = ?',
-            [req.user.id]
-        );
+        const userDoc = await db.firestore.collection('users').doc(req.user.id).get();
         
-        if (result.rows.length === 0) {
+        if (!userDoc.exists) {
             return res.status(404).json({ error: 'User not found' });
         }
         
-        res.json({ user: result.rows[0] });
+        const userData = userDoc.data();
+        res.json({ 
+            user: {
+                id: userDoc.id,
+                email: userData.email,
+                name: userData.name,
+                role: userData.role,
+                created_at: userData.created_at?.toDate?.().toISOString()
+            }
+        });
     } catch (error) {
         console.error('Get me error:', error);
         res.status(500).json({ error: 'Failed to get user data' });
