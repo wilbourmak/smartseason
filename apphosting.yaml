@@ -1,0 +1,14 @@
+env:
+  - variable: NODE_ENV
+    value: production
+  - variable: PORT
+    value: "8080"
+  - variable: JWT_SECRET
+    value: your-jwt-secret-change-this-in-production
+
+runConfig:
+  cpu: 1
+  memoryMiB: 512
+  concurrency: 80
+  maxInstances: 10
+  minInstances: 0
