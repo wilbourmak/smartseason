@@ -11,11 +11,19 @@ function getDb() {
             let creds = null;
             
             try {
-                const serviceAccount = require('../serviceAccountKey.json');
+                // Try Render secret file location first
+                const serviceAccount = require('/etc/secrets/serviceAccountKey.json');
                 creds = admin.credential.cert(serviceAccount);
-                console.log('[Firebase] Using service account file');
-            } catch (e) {
-                if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
+                console.log('[Firebase] Using Render secret file');
+            } catch (renderError) {
+                try {
+                    // Try local file
+                    const serviceAccount = require('../serviceAccountKey.json');
+                    creds = admin.credential.cert(serviceAccount);
+                    console.log('[Firebase] Using local service account file');
+                } catch (localError) {
+                    // Try environment variables
+                    if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
                     creds = admin.credential.cert({
                         projectId: process.env.FIREBASE_PROJECT_ID,
                         privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
