@@ -366,19 +366,23 @@ const getDashboard = async (req, res) => {
         const fields = fieldsResult.rows;
         
         // Calculate stats
-        const stats = {
-            totalFields: fields.length,
-            activeFields: 0,
-            atRiskFields: 0,
-            completedFields: 0
-        };
+        let activeCount = 0, atRiskCount = 0, completedCount = 0;
         
         fields.forEach(field => {
             const status = computeFieldStatus(field);
-            if (status === 'active') stats.activeFields++;
-            else if (status === 'at_risk') stats.atRiskFields++;
-            else if (status === 'completed') stats.completedFields++;
+            if (status === 'active') activeCount++;
+            else if (status === 'at_risk') atRiskCount++;
+            else if (status === 'completed') completedCount++;
         });
+        
+        const stats = {
+            totalFields: fields.length,
+            statusCounts: {
+                active: activeCount,
+                at_risk: atRiskCount,
+                completed: completedCount
+            }
+        };
         
         // Get stage breakdown
         const stageStats = {
@@ -423,7 +427,7 @@ const getDashboard = async (req, res) => {
         }
         
         res.json({
-            stats,
+            summary: stats,
             stageStats,
             recentUpdates: updatesResult.rows,
             agents
