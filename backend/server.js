@@ -2,12 +2,29 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 
+// Handle uncaught errors to prevent crashes
+process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+    // Don't exit, let the server continue running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't exit
+});
+
 // Load environment variables
 dotenv.config();
 
 console.log('Starting SmartSeason server...');
 console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
 console.log('PORT:', process.env.PORT || 5000);
+console.log('JWT_SECRET set:', !!process.env.JWT_SECRET);
+
+if (!process.env.JWT_SECRET) {
+    console.warn('WARNING: JWT_SECRET not set. Using default for development only!');
+    process.env.JWT_SECRET = 'default_dev_secret_do_not_use_in_production';
+}
 
 // Import routes
 const authRoutes = require('./routes/auth');

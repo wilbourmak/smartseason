@@ -43,8 +43,13 @@ function initializeFirebase() {
     }
 }
 
-// Initialize immediately but catch errors
-initializeFirebase();
+// Initialize immediately but DON'T crash on error
+// Let the first database request trigger proper error handling
+try {
+    initializeFirebase();
+} catch (err) {
+    console.error('Initial Firebase setup failed, will retry on first request:', err.message);
+}
 
 // Firestore database interface matching the SQLite pattern
 const firestoreDb = {
