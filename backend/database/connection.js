@@ -1,75 +1,24 @@
-const admin = require('firebase-admin');
+const { getDb, getAdmin } = require('./db');
 
-let db = null;
-let firebaseAdmin = null;
-let initError = null;
-
-function initializeFirebase() {
-    if (firebaseAdmin) return firebaseAdmin;
-    if (initError) throw initError;
-    
-    try {
-        if (!admin.apps.length) {
-            let creds = null;
-            
-            // Try service account file first
-            try {
-                const serviceAccount = require('../serviceAccountKey.json');
-                creds = admin.credential.cert(serviceAccount);
-                console.log('Using service account file for Firebase');
-            } catch (fileError) {
-                // Try environment variables
-                if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
-                    creds = admin.credential.cert({
-                        projectId: process.env.FIREBASE_PROJECT_ID,
-                        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-                        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                    });
-                    console.log('Using environment variables for Firebase');
-                }
-            }
-            
-            // Initialize with credentials or without (ADC fallback)
-            if (creds) {
-                admin.initializeApp({ credential: creds });
-            } else {
-                // Application Default Credentials - may fail in some environments
-                try {
-                    admin.initializeApp();
-                    console.log('Using Application Default Credentials for Firebase');
-                } catch (adcError) {
-                    console.error('ADC failed:', adcError.message);
-                    throw new Error('Firebase credentials not found. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL env vars or provide serviceAccountKey.json');
-                }
-            }
-        }
-        
-        firebaseAdmin = admin;
-        db = admin.firestore();
-        console.log('Firestore database ready');
-        return firebaseAdmin;
-    } catch (error) {
-        initError = error;
-        console.error('Firebase initialization failed:', error.message);
-        throw error;
-    }
-}
-
-// Defer initialization to first use to avoid blocking server startup
-// This prevents the container from failing health checks
-
-// Firestore database interface matching the SQLite pattern
+// Firestore database interface
 const firestoreDb = {
+    get firestore() {
+        return getDb();
+    },
+    
+    get admin() {
+        return getAdmin();
+    },
+    
     collection: (name) => {
-        if (!db) {
-            initializeFirebase();
-        }
-        return db.collection(name);
+        return getDb().collection(name);
     },
     
     query: async (sql, params = []) => {
         // Legacy SQL adapter - parse simple queries for backward compatibility
         const sqlLower = sql.toLowerCase().trim();
+        
+        const db = getDb();
         
         // Parse SELECT queries
         if (sqlLower.startsWith('select')) {
@@ -137,7 +86,7 @@ const firestoreDb = {
                 });
                 
                 const docRef = db.collection(tableName).doc();
-                const timestamp = admin.firestore.FieldValue.serverTimestamp();
+                const timestamp = getAdmin().firestore.FieldValue.serverTimestamp();
                 
                 await docRef.set({
                     ...data,
@@ -172,7 +121,7 @@ const firestoreDb = {
                         }
                     });
                     
-                    const timestamp = admin.firestore.FieldValue.serverTimestamp();
+                    const timestamp = getAdmin().firestore.FieldValue.serverTimestamp();
                     await db.collection(tableName).doc(id).update({
                         ...updates,
                         updated_at: timestamp,
@@ -205,10 +154,7 @@ const firestoreDb = {
     connect: () => {
         console.log('Connected to Firestore database');
         return Promise.resolve();
-    },
-    
-    firestore: db,
-    admin: admin
+    }
 };
 
 module.exports = firestoreDb;
