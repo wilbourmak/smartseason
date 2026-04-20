@@ -1,5 +1,5 @@
 services:
-  # Backend API
+  # Backend API (needs startCommand)
   - type: web
     name: smartseason-api
     runtime: node
@@ -22,7 +22,7 @@ services:
       - key: FIREBASE_PRIVATE_KEY
         sync: false
 
-  # Frontend Static Site
+  # Frontend Static Site (NO startCommand needed)
   - type: static
     name: smartseason-web
     plan: free
