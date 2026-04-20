@@ -1,35 +1,59 @@
 const admin = require('firebase-admin');
 
-// Initialize Firebase Admin if not already initialized
-if (!admin.apps.length) {
+let db = null;
+let firebaseAdmin = null;
+
+function initializeFirebase() {
+    if (firebaseAdmin) return firebaseAdmin;
+    
     try {
-        // Try to use service account file first (local development)
-        const serviceAccount = require('../serviceAccountKey.json');
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount)
-        });
-    } catch (error) {
-        // Fall back to environment variables
-        if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
-            admin.initializeApp({
-                credential: admin.credential.cert({
-                    projectId: process.env.FIREBASE_PROJECT_ID,
-                    privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
-                    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-                })
-            });
-        } else {
-            // Use Application Default Credentials (Cloud Run / GCP)
-            admin.initializeApp();
+        if (!admin.apps.length) {
+            try {
+                // Try to use service account file first (local development)
+                const serviceAccount = require('../serviceAccountKey.json');
+                admin.initializeApp({
+                    credential: admin.credential.cert(serviceAccount)
+                });
+                console.log('Firebase initialized with service account file');
+            } catch (fileError) {
+                // Fall back to environment variables
+                if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY) {
+                    admin.initializeApp({
+                        credential: admin.credential.cert({
+                            projectId: process.env.FIREBASE_PROJECT_ID,
+                            privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+                            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+                        })
+                    });
+                    console.log('Firebase initialized with environment variables');
+                } else {
+                    // Use Application Default Credentials (Cloud Run / GCP)
+                    admin.initializeApp();
+                    console.log('Firebase initialized with Application Default Credentials');
+                }
+            }
         }
+        
+        firebaseAdmin = admin;
+        db = admin.firestore();
+        return firebaseAdmin;
+    } catch (error) {
+        console.error('Failed to initialize Firebase:', error.message);
+        throw error;
     }
 }
 
-const db = admin.firestore();
+// Initialize immediately but catch errors
+initializeFirebase();
 
 // Firestore database interface matching the SQLite pattern
 const firestoreDb = {
-    collection: (name) => db.collection(name),
+    collection: (name) => {
+        if (!db) {
+            initializeFirebase();
+        }
+        return db.collection(name);
+    },
     
     query: async (sql, params = []) => {
         // Legacy SQL adapter - parse simple queries for backward compatibility
