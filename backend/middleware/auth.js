@@ -13,18 +13,21 @@ const authenticate = async (req, res, next) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         // Get user from database
-        const userDoc = await db.firestore.collection('users').doc(decoded.userId).get();
+        const result = await db.query(
+            'SELECT id, email, name, role FROM users WHERE id = ?',
+            [decoded.userId]
+        );
         
-        if (!userDoc.exists) {
+        if (result.rows.length === 0) {
             return res.status(401).json({ error: 'User not found' });
         }
         
-        const userData = userDoc.data();
+        const user = result.rows[0];
         req.user = {
-            id: userDoc.id,
-            email: userData.email,
-            name: userData.name,
-            role: userData.role
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role
         };
         next();
     } catch (error) {

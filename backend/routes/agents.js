@@ -7,32 +7,26 @@ const router = express.Router();
 // Get all field agents (admin only)
 router.get('/', authenticate, authorizeAdmin, async (req, res) => {
     try {
-        const agentsSnapshot = await db.firestore.collection('users')
-            .where('role', '==', 'field_agent')
-            .orderBy('name')
-            .get();
+        // Get all field agents
+        const agentsResult = await db.query(
+            'SELECT id, name, email, created_at FROM users WHERE role = ? ORDER BY name',
+            ['field_agent']
+        );
         
         // Get field counts for each agent
-        const allFieldsSnapshot = await db.firestore.collection('fields').get();
+        const fieldsResult = await db.query(
+            'SELECT assigned_agent_id, COUNT(*) as count FROM fields WHERE assigned_agent_id IS NOT NULL GROUP BY assigned_agent_id'
+        );
+        
         const agentFieldCounts = {};
-        
-        allFieldsSnapshot.docs.forEach(doc => {
-            const agentId = doc.data().assigned_agent_id;
-            if (agentId) {
-                agentFieldCounts[agentId] = (agentFieldCounts[agentId] || 0) + 1;
-            }
+        fieldsResult.rows.forEach(row => {
+            agentFieldCounts[row.assigned_agent_id] = row.count;
         });
         
-        const agents = agentsSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                name: data.name,
-                email: data.email,
-                created_at: data.created_at?.toDate?.().toISOString() || data.created_at,
-                assigned_fields_count: agentFieldCounts[doc.id] || 0
-            };
-        });
+        const agents = agentsResult.rows.map(agent => ({
+            ...agent,
+            assigned_fields_count: agentFieldCounts[agent.id] || 0
+        }));
         
         res.json({ agents });
     } catch (error) {
@@ -47,43 +41,24 @@ router.get('/:id', authenticate, authorizeAdmin, async (req, res) => {
         const { id } = req.params;
         
         // Get agent info
-        const agentDoc = await db.firestore.collection('users').doc(id).get();
+        const agentResult = await db.query(
+            'SELECT id, name, email, created_at FROM users WHERE id = ? AND role = ?',
+            [id, 'field_agent']
+        );
         
-        if (!agentDoc.exists) {
+        if (agentResult.rows.length === 0) {
             return res.status(404).json({ error: 'Agent not found' });
         }
         
-        const agentData = agentDoc.data();
-        
-        if (agentData.role !== 'field_agent') {
-            return res.status(404).json({ error: 'Agent not found' });
-        }
-        
-        const agent = {
-            id: agentDoc.id,
-            name: agentData.name,
-            email: agentData.email,
-            created_at: agentData.created_at?.toDate?.().toISOString() || agentData.created_at
-        };
+        const agent = agentResult.rows[0];
         
         // Get assigned fields
-        const fieldsSnapshot = await db.firestore.collection('fields')
-            .where('assigned_agent_id', '==', id)
-            .orderBy('created_at', 'desc')
-            .get();
+        const fieldsResult = await db.query(
+            'SELECT * FROM fields WHERE assigned_agent_id = ? ORDER BY created_at DESC',
+            [id]
+        );
         
-        const fields = fieldsSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return {
-                id: doc.id,
-                ...data,
-                planting_date: data.planting_date || data.plantingDate,
-                created_at: data.created_at?.toDate?.().toISOString() || data.created_at,
-                updated_at: data.updated_at?.toDate?.().toISOString() || data.updated_at
-            };
-        });
-        
-        res.json({ agent, fields });
+        res.json({ agent, fields: fieldsResult.rows });
     } catch (error) {
         console.error('Get agent error:', error);
         res.status(500).json({ error: 'Failed to retrieve agent' });
